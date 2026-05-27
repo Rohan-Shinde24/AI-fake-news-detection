@@ -1,0 +1,11 @@
+streamlit
+torch
+transformers
+pandas
+plotly
+safetensors
+streamlit-option-menu
+streamlit-extras
+streamlit-lottie
+PyPDF2
+requests
