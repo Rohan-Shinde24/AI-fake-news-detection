@@ -9,3 +9,4 @@ streamlit-extras
 streamlit-lottie
 PyPDF2
 requests
+

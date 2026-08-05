@@ -6,10 +6,30 @@ import plotly.graph_objects as go
 import time
 import requests
 import io
-from streamlit_option_menu import option_menu
-from streamlit_lottie import st_lottie
-from streamlit_extras.colored_header import colored_header
-from streamlit_extras.add_vertical_space import add_vertical_space
+try:
+    from streamlit_option_menu import option_menu
+except ImportError:
+    option_menu = None
+
+try:
+    from streamlit_lottie import st_lottie
+except ImportError:
+    st_lottie = None
+
+try:
+    from streamlit_extras.colored_header import colored_header
+except ImportError:
+    def colored_header(label="", description="", color_name="blue-70"):
+        if label or description:
+            st.markdown(f"### {label}\n\n{description}")
+
+try:
+    from streamlit_extras.add_vertical_space import add_vertical_space
+except ImportError:
+    def add_vertical_space(count=1):
+        for _ in range(count):
+            st.markdown("<br>", unsafe_allow_html=True)
+
 import torch
 from transformers import AutoTokenizer, AutoModelForSequenceClassification
 import PyPDF2
@@ -27,7 +47,21 @@ st.set_page_config(
 # ==========================================
 # CACHING & INITIALIZATION
 # ==========================================
-@st.cache_data()
+# Streamlit compatibility helpers for older deployments.
+if hasattr(st, "cache_data"):
+    cache_data = st.cache_data
+else:
+    cache_data = st.cache
+
+if hasattr(st, "cache_resource"):
+    def cache_resource(*args, **kwargs):
+        return st.cache_resource(*args, **kwargs)
+else:
+    def cache_resource(*args, **kwargs):
+        kwargs.pop("show_spinner", None)
+        return st.cache(allow_output_mutation=True)
+
+@cache_data()
 def load_lottieurl(url: str):
     """Loads Lottie animation from a URL."""
     try:
@@ -50,7 +84,7 @@ if 'input_text' not in st.session_state:
     st.session_state.input_text = ""
 
 # Load AI Model
-@st.cache_resource(show_spinner="Initializing AI Core...")
+@cache_resource(show_spinner="Initializing AI Core...")
 def load_model():
     model_path = "./model"
     try:
@@ -208,25 +242,33 @@ def sidebar():
     with st.sidebar:
         st.markdown("<h2 style='text-align: center; font-weight: 800;'>Fake AI 🌐</h2>", unsafe_allow_html=True)
         
-        if lottie_ai:
+        if lottie_ai and st_lottie:
             st_lottie(lottie_ai, height=150, key="sidebar_lottie")
             
         st.markdown("---")
         
         # Streamlit Option Menu for Navigation
-        selected = option_menu(
-            menu_title="Navigation",
-            options=["Fake News Detector", "History", "Model Accuracy", "About Project"],
-            icons=["shield-check", "clock-history", "graph-up", "info-circle"],
-            menu_icon="cast",
-            default_index=0,
-            styles={
-                "container": {"padding": "0!important", "background-color": "transparent"},
-                "icon": {"color": "#00d2ff", "font-size": "20px"},
-                "nav-link": {"font-size": "16px", "text-align": "left", "margin": "5px 0", "border-radius": "10px"},
-                "nav-link-selected": {"background-color": "rgba(0,210,255,0.2)", "color": "#00d2ff", "border-left": "4px solid #00d2ff"},
-            }
-        )
+        if option_menu is not None:
+            selected = option_menu(
+                menu_title="Navigation",
+                options=["Fake News Detector", "History", "Model Accuracy", "About Project"],
+                icons=["shield-check", "clock-history", "graph-up", "info-circle"],
+                menu_icon="cast",
+                default_index=0,
+                styles={
+                    "container": {"padding": "0!important", "background-color": "transparent"},
+                    "icon": {"color": "#00d2ff", "font-size": "20px"},
+                    "nav-link": {"font-size": "16px", "text-align": "left", "margin": "5px 0", "border-radius": "10px"},
+                    "nav-link-selected": {"background-color": "rgba(0,210,255,0.2)", "color": "#00d2ff", "border-left": "4px solid #00d2ff"},
+                }
+            )
+        else:
+            selected = st.radio(
+                "Navigation",
+                ["Fake News Detector", "History", "Model Accuracy", "About Project"],
+                index=0,
+                horizontal=False
+            )
         
         st.markdown("---")
         
@@ -293,14 +335,20 @@ def render_detector():
                 
         with tab4:
             st.info("Speak into your microphone to transcribe and analyze.")
-            audio_val = st.audio_input("Record Voice")
-            if audio_val:
-                st.success("Audio captured! (Transcription simulated for demo)")
-                text_to_analyze = "Simulated transcription of the recorded audio stream..."
+            if hasattr(st, "audio_input"): 
+                audio_val = st.audio_input("Record Voice")
+                if audio_val:
+                    st.success("Audio captured! (Transcription simulated for demo)")
+                    text_to_analyze = "Simulated transcription of the recorded audio stream..."
+            else:
+                st.warning("Voice recording is not supported in this Streamlit version. Please use text input or upload a file.")
+                audio_note = st.text_area("Or paste text directly here", height=150)
+                if audio_note:
+                    text_to_analyze = audio_note
                 
         c1, c2 = st.columns([2, 1])
         with c1:
-            analyze_btn = st.button("🚀 Analyze Now", use_container_width=True, type="primary")
+            analyze_btn = st.button("🚀 Analyze Now", use_container_width=True)
         with c2:
             if st.button("🗑️ Clear", use_container_width=True):
                 st.session_state.input_text = ""
